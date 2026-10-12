@@ -1,0 +1,17 @@
+---
+import { presets, today } from '../lib/range';
+const { range, compare } = Astro.props;
+const t = today();
+const qs = (f: string, to: string) => `?from=${f}&to=${to}${compare ? '' : '&compare=0'}`;
+---
+<section class="controls">
+  <nav class="presets" aria-label="Date range presets">
+    {presets().map((p) => <a href={qs(p.from, p.to)} class:list={[{ on: p.from === range.from && p.to === range.to }]}>{p.label}</a>)}
+  </nav>
+  <form method="get" class="custom">
+    <label>From <input type="date" name="from" value={range.from} max={t} required /></label>
+    <label>To <input type="date" name="to" value={range.to} max={t} required /></label>
+    <label class="chk"><input type="checkbox" name="compare" value="1" checked={compare} /> Compare to previous period</label>
+    <button type="submit">Update</button>
+  </form>
+</section>

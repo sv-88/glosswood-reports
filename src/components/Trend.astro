@@ -1,0 +1,22 @@
+---
+import { fmtBucket } from '../lib/range';
+const { title, note, unit, buckets, series } = Astro.props;
+const max = Math.max(1, ...buckets.map((b: any) => series.reduce((s: number, x: any) => s + b[x.field], 0)));
+const labelEvery = unit === 'month' ? 1 : Math.max(1, Math.ceil(buckets.length / 10));
+const rev = [...series].reverse();
+---
+<section class="card">
+  <h2>{title}</h2>
+  <p class="note">{note}</p>
+  {series.length > 1 && <div class="legend">{series.map((s: any) => <><span class={`sw ${s.cls}`}></span>{s.label}</>)}</div>}
+  <div class="bars" style={`--n:${buckets.length}`}>
+    {buckets.map((b: any, i: number) => (
+      <div class="col" title={`${fmtBucket(b.key, unit)}: ${series.map((s: any) => `${b[s.field]} ${s.label.toLowerCase()}`).join(', ')}`}>
+        <div class="stack">
+          {rev.map((s: any) => <div class={`seg ${s.cls}`} style={`height:${(b[s.field] / max) * 100}%`}></div>)}
+        </div>
+        {i % labelEvery === 0 && <div class="x">{fmtBucket(b.key, unit)}</div>}
+      </div>
+    ))}
+  </div>
+</section>

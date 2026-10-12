@@ -1,0 +1,32 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { getEnv } from '../lib/env';
+import { COOKIE, safeEqual, token } from '../lib/auth';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+let error = '';
+if (Astro.request.method === 'POST') {
+  const env = getEnv(Astro.locals);
+  const form = await Astro.request.formData();
+  const pw = String(form.get('password') ?? '');
+  if (env.REPORT_PASSWORD && env.SESSION_SECRET && safeEqual(pw, env.REPORT_PASSWORD)) {
+    Astro.cookies.set(COOKIE, await token(env.REPORT_PASSWORD, env.SESSION_SECRET), {
+      httpOnly: true, secure: Astro.url.protocol === 'https:', sameSite: 'lax', path: base || '/', maxAge: 60 * 60 * 24 * 30,
+    });
+    return Astro.redirect(base + '/');
+  }
+  error = 'That password is not right.';
+}
+---
+<Layout title="Sign in">
+  <main class="login">
+    <p class="kicker">Glosswood · Reports</p>
+    <h1>Sign in</h1>
+    <form method="post">
+      <label for="pw">Password</label>
+      <input id="pw" name="password" type="password" autocomplete="current-password" required autofocus />
+      {error && <p class="err">{error}</p>}
+      <button type="submit">View report</button>
+    </form>
+  </main>
+</Layout>

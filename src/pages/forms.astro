@@ -1,0 +1,21 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Header from '../components/Header.astro';
+import Controls from '../components/Controls.astro';
+import FormsView from '../components/FormsView.astro';
+import { getEnv } from '../lib/env';
+import { parseRange, fmtDate } from '../lib/range';
+import { daysBetween } from '../lib/aggregate';
+import { loadForms } from '../lib/reports';
+
+const { range, compare } = parseRange(Astro.url);
+const r = await loadForms(getEnv(Astro.locals), range, compare);
+const days = daysBetween(range.from, range.to);
+---
+<Layout title="Form submissions">
+  <main class="wrap">
+    <Header kicker="Glosswood · Website form submissions" title="Form submissions" sub={`${fmtDate(range.from)} – ${fmtDate(range.to)} · ${days} ${days === 1 ? 'day' : 'days'} · Perth time`} />
+    <Controls range={range} compare={compare} />
+    <FormsView r={r} />
+  </main>
+</Layout>

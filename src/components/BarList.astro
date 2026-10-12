@@ -1,0 +1,12 @@
+---
+const { title, note, list } = Astro.props;
+const top = Math.max(1, list[0]?.n ?? 1);
+---
+<section class="card">
+  <h2>{title}</h2>
+  <p class="note">{note}</p>
+  {list.length === 0 && <p class="note">Nothing in this period.</p>}
+  {list.map((r: any) => (
+    <div class="row"><div class="k" title={r.label}>{r.label}</div><div class="t"><div class="f" style={`width:${(r.n / top) * 100}%`}></div></div><div class="v">{r.n}</div></div>
+  ))}
+</section>

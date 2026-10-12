@@ -1,0 +1,35 @@
+---
+import Stats from './Stats.astro';
+import Trend from './Trend.astro';
+import BarList from './BarList.astro';
+import Takeaway from './Takeaway.astro';
+import { trafficTakeaway } from '../lib/takeaway';
+import { fmtNum, fmtPct } from '../lib/range';
+const { r } = Astro.props;
+---
+{!r.ok && <p class="card err">{r.msg}</p>}
+{r.ok && (() => {
+  const { cur, prev, prevRange } = r.data;
+  const channels = cur.channels.map((c: any) => ({ label: `${c.label} (${fmtPct(c.n / Math.max(1, cur.sessions))})`, n: c.n }));
+  return (
+    <>
+      <Takeaway lines={trafficTakeaway(r.data)} />
+      <Stats prevRange={prevRange} items={[
+        { label: 'Visits (sessions)', n: fmtNum(cur.sessions), raw: cur.sessions, p: prev?.sessions, pd: prev ? fmtNum(prev.sessions) : undefined },
+        { label: 'Visitors (users)', n: fmtNum(cur.users), raw: cur.users, p: prev?.users, pd: prev ? fmtNum(prev.users) : undefined },
+      ]} />
+      <Trend title={`Visits by ${cur.unit}`} note={cur.unit === 'day' ? 'Sessions per day' : 'Sessions per calendar month; a month at either end may be partial'}
+        unit={cur.unit} buckets={cur.buckets} series={[{ field: 'sessions', label: 'Sessions', cls: 'a' }]} />
+      <div class="grid">
+        <BarList title="Where visitors come from" note="Sessions by channel" list={channels} />
+        <section class="card">
+          <h2>Top pages</h2>
+          <p class="note">Most viewed pages (thank-you pages excluded)</p>
+          <div class="trow head" style="--c:2"><div>Page</div><div>Views</div><div>Visitors</div></div>
+          {cur.pages.map((p: any) => <div class="trow" style="--c:2"><div>{p.path}</div><div>{fmtNum(p.views)}</div><div>{fmtNum(p.users)}</div></div>)}
+        </section>
+      </div>
+      <p class="foot">Source: Google Analytics 4 (Perth property time zone). A session is one visit; a user is one visitor. Visitors who decline cookies or use ad blockers may not be counted.</p>
+    </>
+  );
+})()}

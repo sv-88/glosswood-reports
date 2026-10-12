@@ -1,0 +1,38 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { presets, today } from '../lib/range';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const t = today();
+const month = presets()[0];
+const reports = [
+  { href: '/forms', title: 'Form submissions', text: 'Sample requests and contact enquiries, by state, product and finish.' },
+  { href: '/traffic', title: 'Website traffic', text: 'Visits over time, where visitors come from, and the most viewed pages.' },
+  { href: '/enquiries', title: 'Enquiry performance', text: 'How many visits turn into enquiries, and which channels produce them.' },
+];
+---
+<Layout title="Reports">
+  <main class="wrap">
+    <header>
+      <p class="kicker">Glosswood · Website reports</p>
+      <h1>Reports</h1>
+      <p class="sub">Choose a report. Each one opens on this month and lets you pick any date range.</p>
+    </header>
+
+    <section class="tiles">
+      {reports.map((r) => <a class="tile" href={`${base}${r.href}`}><h2>{r.title}</h2><p>{r.text}</p></a>)}
+      <div class="tile soon"><span class="badge">Coming soon</span><h2>Paid advertising</h2><p>Traffic and enquiries from Meta and Pinterest campaigns.</p></div>
+    </section>
+
+    <section class="card overall">
+      <h2>Overall report</h2>
+      <p class="note">All reports on one page, with a summary for each. Print it or save it as a PDF.</p>
+      <form method="get" action={`${base}/report`} class="custom">
+        <label>From <input type="date" name="from" value={month.from} max={t} required /></label>
+        <label>To <input type="date" name="to" value={month.to} max={t} required /></label>
+        <label class="chk"><input type="checkbox" name="compare" value="1" checked /> Compare to previous period</label>
+        <button type="submit">Generate report</button>
+      </form>
+    </section>
+  </main>
+</Layout>

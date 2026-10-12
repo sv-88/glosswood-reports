@@ -1,0 +1,19 @@
+---
+import { fmtDate } from '../lib/range';
+const { items, prevRange } = Astro.props;
+const delta = (a: number, b: number) => {
+  const d = a - b;
+  return { text: (d > 0 ? '+' : d < 0 ? '−' : '') + Math.abs(Math.round(d * 10) / 10), cls: d > 0 ? 'up' : d < 0 ? 'down' : 'flat' };
+};
+---
+<section class="stats">
+  {items.map((s: any) => (
+    <div class="card stat">
+      <div class="lbl">{s.label}</div>
+      <div class="num">{s.n}</div>
+      {s.p !== undefined && s.p !== null && (
+        <div class={`delta ${delta(s.raw, s.p).cls}`}>{delta(s.raw, s.p).text}{s.unit ?? ''} <span>vs {s.pd ?? s.p} in {fmtDate(prevRange.from)} – {fmtDate(prevRange.to)}</span></div>
+      )}
+    </div>
+  ))}
+</section>

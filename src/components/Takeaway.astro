@@ -1,0 +1,4 @@
+---
+const { lines } = Astro.props;
+---
+<section class="take"><h2>Summary</h2>{lines.map((l: string) => <p>{l}</p>)}</section>

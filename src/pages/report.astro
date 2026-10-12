@@ -1,0 +1,29 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Header from '../components/Header.astro';
+import Controls from '../components/Controls.astro';
+import FormsView from '../components/FormsView.astro';
+import TrafficView from '../components/TrafficView.astro';
+import EnquiryView from '../components/EnquiryView.astro';
+import { getEnv } from '../lib/env';
+import { parseRange, fmtDate } from '../lib/range';
+import { daysBetween } from '../lib/aggregate';
+import { loadForms, loadTraffic, loadEnquiry } from '../lib/reports';
+
+const env = getEnv(Astro.locals);
+const { range, compare } = parseRange(Astro.url);
+const [forms, traffic, enquiry] = await Promise.all([loadForms(env, range, compare), loadTraffic(env, range, compare), loadEnquiry(env, range, compare)]);
+const days = daysBetween(range.from, range.to);
+const generated = new Date().toLocaleString('en-AU', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Australia/Perth' });
+---
+<Layout title="Overall report">
+  <main class="wrap">
+    <Header kicker="Glosswood · Overall report" title="Website performance report" sub={`${fmtDate(range.from)} – ${fmtDate(range.to)} · ${days} ${days === 1 ? 'day' : 'days'} · Perth time · Generated ${generated}`} />
+    <Controls range={range} compare={compare} />
+    <div class="actions noprint"><button type="button" id="print">Print / Save as PDF</button><span class="note" style="margin:0">Choose “Save as PDF” as the destination in the print window.</span></div>
+    <section class="report-sec first"><h2 class="rt">Form submissions</h2><FormsView r={forms} /></section>
+    <section class="report-sec"><h2 class="rt">Website traffic</h2><TrafficView r={traffic} /></section>
+    <section class="report-sec"><h2 class="rt">Enquiry performance</h2><EnquiryView r={enquiry} /></section>
+  </main>
+</Layout>
+<script is:inline>document.getElementById('print').addEventListener('click', function () { window.print(); });</script>

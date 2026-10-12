@@ -1,0 +1,21 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Header from '../components/Header.astro';
+import Controls from '../components/Controls.astro';
+import TrafficView from '../components/TrafficView.astro';
+import { getEnv } from '../lib/env';
+import { parseRange, fmtDate } from '../lib/range';
+import { daysBetween } from '../lib/aggregate';
+import { loadTraffic } from '../lib/reports';
+
+const { range, compare } = parseRange(Astro.url);
+const r = await loadTraffic(getEnv(Astro.locals), range, compare);
+const days = daysBetween(range.from, range.to);
+---
+<Layout title="Website traffic">
+  <main class="wrap">
+    <Header kicker="Glosswood · Website traffic" title="Website traffic" sub={`${fmtDate(range.from)} – ${fmtDate(range.to)} · ${days} ${days === 1 ? 'day' : 'days'} · Perth time`} />
+    <Controls range={range} compare={compare} />
+    <TrafficView r={r} />
+  </main>
+</Layout>

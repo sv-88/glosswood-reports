@@ -1,0 +1,38 @@
+---
+import Stats from './Stats.astro';
+import Trend from './Trend.astro';
+import BarList from './BarList.astro';
+import Takeaway from './Takeaway.astro';
+import { formsTakeaway } from '../lib/takeaway';
+const { r } = Astro.props;
+---
+{!r.ok && <p class="card err">{r.msg}</p>}
+{r.ok && (() => {
+  const { cur, prev, prevRange } = r.data;
+  return (
+    <>
+      <Takeaway lines={formsTakeaway(r.data)} />
+      <Stats prevRange={prevRange} items={[
+        { label: 'All submissions', n: cur.total, raw: cur.total, p: prev?.total },
+        { label: 'Sample requests', n: cur.sample, raw: cur.sample, p: prev?.sample },
+        { label: 'Contact enquiries', n: cur.contact, raw: cur.contact, p: prev?.contact },
+      ]} />
+      <Trend title={`Submissions by ${cur.unit}`} note={cur.unit === 'day' ? 'Count per day' : 'Count per calendar month; a month at either end may be partial'}
+        unit={cur.unit} buckets={cur.buckets}
+        series={[{ field: 'sample', label: 'Sample requests', cls: 'a' }, { field: 'contact', label: 'Contact enquiries', cls: 'b' }]} />
+      <div class="grid">
+        <BarList title="By state" note="All submissions" list={cur.states} />
+        <BarList title="Who is enquiring" note="Sample requests, by enquirer type" list={cur.categories} />
+        <BarList title="Products requested" note="Sample requests naming each product" list={cur.products} />
+        <BarList title="Finishes requested" note="Sample requests naming each finish" list={cur.finishes} />
+      </div>
+      <section class="card">
+        <h2>Where submissions came from</h2>
+        <p class="note">Page the form was submitted on</p>
+        <div class="prow head"><div>Page</div><div>Form</div><div class="pn">Submissions</div></div>
+        {cur.pages.map((p: any) => <div class="prow"><div>{p.page}</div><div>{p.form}</div><div class="pn">{p.n}</div></div>)}
+      </section>
+      <p class="foot">Source: Webflow form submissions, grouped by Perth time (AWST). Names, emails, phone numbers, addresses and messages are not shown. Contact enquiries before 4 September 2026 come from a manual Webflow export, so their page, and the enquirer type, were not recorded.</p>
+    </>
+  );
+})()}

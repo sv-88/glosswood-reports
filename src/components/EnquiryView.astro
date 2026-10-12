@@ -1,0 +1,62 @@
+---
+import Stats from './Stats.astro';
+import Takeaway from './Takeaway.astro';
+import { enquiryTakeaway, enquiryRate } from '../lib/takeaway';
+import { fmtNum, fmtPct } from '../lib/range';
+const { r } = Astro.props;
+---
+{!r.ok && <p class="card err">{r.msg}</p>}
+{r.ok && (() => {
+  const d = r.data;
+  const { forms, sessions, prevSessions, ga, channels } = d;
+  const total = forms.cur.total;
+  const rate = enquiryRate(total, sessions);
+  const prevRate = forms.prev && prevSessions ? enquiryRate(forms.prev.total, prevSessions) : null;
+  const gaTotal = ga.sample + ga.contact;
+  const topRate = Math.max(1, ...channels.map((c: any) => c.sample + c.contact));
+  return (
+    <>
+      <Takeaway lines={enquiryTakeaway(d)} />
+      <Stats prevRange={forms.prevRange} items={[
+        { label: 'Conversion rate', n: fmtPct(rate), raw: rate * 100, p: prevRate === null ? undefined : prevRate * 100, pd: prevRate === null ? undefined : fmtPct(prevRate), unit: ' pts' },
+        { label: 'Form submissions (Webflow)', n: fmtNum(total), raw: total, p: forms.prev?.total },
+        { label: 'Visits (GA4 sessions)', n: fmtNum(sessions), raw: sessions, p: prevSessions ?? undefined, pd: prevSessions === null ? undefined : fmtNum(prevSessions) },
+      ]} />
+      <p class="note" style="margin:-.25rem 0 1rem">Conversion rate = form submissions ÷ website visits (sessions) for the same dates.</p>
+
+      <section class="card">
+        <h2>Enquiries: Webflow and Google Analytics side by side</h2>
+        <p class="note">Webflow counts submissions received. Google Analytics counts visits to the thank-you pages shown after each form.</p>
+        <div class="trow head" style="--c:3"><div>Form</div><div>Webflow</div><div>GA4</div><div>Difference</div></div>
+        {[
+          { l: 'Sample requests', w: forms.cur.sample, g: ga.sample },
+          { l: 'Contact enquiries', w: forms.cur.contact, g: ga.contact },
+          { l: 'Total', w: total, g: gaTotal },
+        ].map((x) => <div class="trow" style="--c:3"><div>{x.l}</div><div>{fmtNum(x.w)}</div><div>{fmtNum(x.g)}</div><div>{x.g - x.w > 0 ? '+' : x.g - x.w < 0 ? '−' : ''}{Math.abs(x.g - x.w)}</div></div>)}
+      </section>
+
+      <section class="card">
+        <h2>Which channels produce enquiries</h2>
+        <p class="note">From Google Analytics: thank-you page visits by the channel that brought the visitor</p>
+        <div class="trow head" style="--c:4"><div>Channel</div><div>Visits</div><div>Sample requests</div><div>Contact enquiries</div><div>Enquiries per 100 visits</div></div>
+        {channels.map((c: any) => (
+          <div class="trow" style="--c:4"><div>{c.channel}</div><div>{fmtNum(c.sessions)}</div><div>{fmtNum(c.sample)}</div><div>{fmtNum(c.contact)}</div><div>{(enquiryRate(c.sample + c.contact, c.sessions) * 100).toFixed(1)}</div></div>
+        ))}
+        {channels.length === 0 && <p class="note">No data for this period.</p>}
+      </section>
+
+      <section class="card">
+        <h2>Why the counts can differ</h2>
+        <p class="note">Webflow and Google Analytics measure the same enquiries in different ways, so they will rarely match exactly.</p>
+        <ul class="why">
+          <li><strong>Google Analytics can count fewer</strong> when a visitor uses an ad blocker or declines cookie consent, because their visit is never recorded.</li>
+          <li><strong>Google Analytics can count more</strong> when someone refreshes or revisits a thank-you page, or lands on it directly (for example from a bookmark).</li>
+          <li><strong>Webflow can count more</strong> because it includes spam submissions that Google Analytics never sees as a genuine visit.</li>
+          <li><strong>Dates can shift slightly</strong> around midnight if the Google Analytics property uses a different time zone from Perth.</li>
+          <li>Contact enquiries before 4 September 2026 come from a manual export, so they are in Webflow's figures but not split by channel.</li>
+        </ul>
+      </section>
+      <p class="foot">Sources: Webflow form submissions and Google Analytics 4, grouped by Perth time (AWST).</p>
+    </>
+  );
+})()}
