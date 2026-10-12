@@ -1,0 +1,184 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { getEnv } from '../lib/env';
+import { loadSubmissions } from '../lib/data';
+import { dayKey, daysBetween, previousRange, shiftDay, summarise } from '../lib/aggregate';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const today = dayKey(Date.now());
+const valid = (s: string | null) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s));
+
+let from = Astro.url.searchParams.get('from');
+let to = Astro.url.searchParams.get('to');
+if (!valid(from) || !valid(to) || from! > to!) { from = today.slice(0, 8) + '01'; to = today; }
+const range = { from: from!, to: to! };
+const compare = Astro.url.searchParams.get('compare') !== '0';
+
+const monthStart = today.slice(0, 8) + '01';
+const lastMonthEnd = shiftDay(monthStart, -1);
+const presets = [
+  { label: 'This month', from: monthStart, to: today },
+  { label: 'Last month', from: lastMonthEnd.slice(0, 8) + '01', to: lastMonthEnd },
+  { label: 'Last 30 days', from: shiftDay(today, -29), to: today },
+  { label: 'Last 90 days', from: shiftDay(today, -89), to: today },
+  { label: 'Year to date', from: today.slice(0, 4) + '-01-01', to: today },
+];
+const qs = (f: string, t: string, c = compare) => `?from=${f}&to=${t}${c ? '' : '&compare=0'}`;
+
+let error = '';
+let cur: ReturnType<typeof summarise> | null = null;
+let prev: ReturnType<typeof summarise> | null = null;
+const prevRange = previousRange(range);
+try {
+  const subs = await loadSubmissions(getEnv(Astro.locals));
+  cur = summarise(subs, range);
+  prev = compare ? summarise(subs, prevRange) : null;
+} catch (e) {
+  error = 'The report could not load the latest submissions. Please try again shortly.';
+}
+
+const fmtDate = (d: string) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+const fmtBucket = (k: string, unit: string) =>
+  unit === 'day'
+    ? new Date(k + 'T00:00:00Z').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+    : new Date(k + '-01T00:00:00Z').toLocaleDateString('en-AU', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+const delta = (a: number, b: number) => {
+  const d = a - b;
+  return { text: (d > 0 ? '+' : d < 0 ? '−' : '') + Math.abs(d), cls: d > 0 ? 'up' : d < 0 ? 'down' : 'flat' };
+};
+const days = daysBetween(range.from, range.to);
+const max = cur ? Math.max(1, ...cur.buckets.map((b) => b.sample + b.contact)) : 1;
+const labelEvery = cur ? (cur.unit === 'month' ? 1 : Math.max(1, Math.ceil(cur.buckets.length / 10))) : 1;
+const barW = (n: number, list: { n: number }[]) => (n / Math.max(1, list[0]?.n ?? 1)) * 100;
+---
+<Layout title="Form submissions">
+  <main class="wrap">
+    <header>
+      <p class="kicker">Glosswood · Website form submissions</p>
+      <h1>Form submissions</h1>
+      <p class="sub">{fmtDate(range.from)} – {fmtDate(range.to)} · {days} {days === 1 ? 'day' : 'days'} · Perth time</p>
+    </header>
+
+    <section class="controls">
+      <nav class="presets" aria-label="Date range presets">
+        {presets.map((p) => <a href={qs(p.from, p.to)} class:list={[{ on: p.from === range.from && p.to === range.to }]}>{p.label}</a>)}
+      </nav>
+      <form method="get" class="custom">
+        <label>From <input type="date" name="from" value={range.from} max={today} required /></label>
+        <label>To <input type="date" name="to" value={range.to} max={today} required /></label>
+        <label class="chk"><input type="checkbox" name="compare" value="1" checked={compare} /> Compare to previous period</label>
+        <button type="submit">Update</button>
+      </form>
+    </section>
+
+    {error && <p class="card err">{error}</p>}
+
+    {cur && (
+      <>
+        <section class="stats">
+          {[
+            { label: 'All submissions', n: cur.total, p: prev?.total },
+            { label: 'Sample requests', n: cur.sample, p: prev?.sample },
+            { label: 'Contact enquiries', n: cur.contact, p: prev?.contact },
+          ].map((s) => (
+            <div class="card stat">
+              <div class="lbl">{s.label}</div>
+              <div class="num">{s.n}</div>
+              {s.p !== undefined && (
+                <div class={`delta ${delta(s.n, s.p).cls}`}>{delta(s.n, s.p).text} <span>vs {s.p} in {fmtDate(prevRange.from)} – {fmtDate(prevRange.to)}</span></div>
+              )}
+            </div>
+          ))}
+        </section>
+
+        <section class="card">
+          <h2>Submissions by {cur.unit}</h2>
+          <p class="note">{cur.unit === 'day' ? 'Count per day' : 'Count per calendar month; a month at either end may be partial'}</p>
+          <div class="legend"><span class="sw a"></span>Sample requests<span class="sw b"></span>Contact enquiries</div>
+          <div class="bars" style={`--n:${cur.buckets.length}`}>
+            {cur.buckets.map((b, i) => (
+              <div class="col" title={`${fmtBucket(b.key, cur!.unit)}: ${b.sample} sample requests, ${b.contact} contact enquiries`}>
+                <div class="stack">
+                  <div class="seg b" style={`height:${(b.contact / max) * 100}%`}></div>
+                  <div class="seg a" style={`height:${(b.sample / max) * 100}%`}></div>
+                </div>
+                {i % labelEvery === 0 && <div class="x">{fmtBucket(b.key, cur!.unit)}</div>}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <div class="grid">
+          {[
+            { t: 'By state', n: 'All submissions', l: cur.states },
+            { t: 'Who is enquiring', n: 'Sample requests, by enquirer type', l: cur.categories },
+            { t: 'Products requested', n: 'Sample requests naming each product', l: cur.products },
+            { t: 'Finishes requested', n: 'Sample requests naming each finish', l: cur.finishes },
+          ].map((c) => (
+            <section class="card">
+              <h2>{c.t}</h2>
+              <p class="note">{c.n}</p>
+              {c.l.length === 0 && <p class="note">Nothing in this period.</p>}
+              {c.l.map((r) => (
+                <div class="row"><div class="k">{r.label}</div><div class="t"><div class="f" style={`width:${barW(r.n, c.l)}%`}></div></div><div class="v">{r.n}</div></div>
+              ))}
+            </section>
+          ))}
+        </div>
+
+        <section class="card">
+          <h2>Where submissions came from</h2>
+          <p class="note">Page the form was submitted on</p>
+          <div class="prow head"><div>Page</div><div>Form</div><div class="pn">Submissions</div></div>
+          {cur.pages.map((r) => <div class="prow"><div>{r.page}</div><div>{r.form}</div><div class="pn">{r.n}</div></div>)}
+        </section>
+
+        <p class="foot">Source: Webflow form submissions, grouped by Perth time (AWST). Names, emails, phone numbers, addresses and messages are not shown. Contact enquiries before 4 September 2026 come from a manual Webflow export, so their page, and the enquirer type, were not recorded. Data refreshes each time this page loads.</p>
+      </>
+    )}
+  </main>
+</Layout>
+
+<style is:global>
+  .wrap{max-width:68rem;margin:0 auto;padding:3rem 1.25rem}
+  .sub{color:var(--muted);margin:.5rem 0 1.25rem}
+  .controls{display:flex;flex-direction:column;gap:.75rem;margin-bottom:1rem}
+  .presets{display:flex;flex-wrap:wrap;gap:.5rem}
+  .presets a{padding:.4rem .8rem;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--body);text-decoration:none;font-size:.9rem}
+  .presets a.on{background:var(--a);color:#fff;border-color:var(--a)}
+  .custom{display:flex;flex-wrap:wrap;gap:.75rem;align-items:end}
+  .custom label{display:flex;flex-direction:column;gap:.25rem;font-size:.8rem;color:var(--muted)}
+  .custom .chk{flex-direction:row;align-items:center;gap:.4rem;padding-bottom:.65rem}
+  .custom .chk input{padding:0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:1.1rem 1.25rem;margin-bottom:1rem}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr));gap:1rem}
+  .stats .card{margin-bottom:0}
+  .stats{margin-bottom:1rem}
+  .lbl{font-size:.8rem;color:var(--muted)}
+  .num{font-family:Fields,Georgia,serif;font-size:2.8rem;line-height:1.1;color:var(--ink)}
+  .delta{font-size:.85rem;font-weight:600}
+  .delta span{font-weight:400;color:var(--muted)}
+  .delta.up{color:var(--good)}.delta.down{color:var(--bad)}.delta.flat{color:var(--muted)}
+  h2{font-family:Nhaas,Arial,sans-serif;font-weight:600;font-size:1.1rem;color:var(--ink)}
+  .note{font-size:.8rem;color:var(--muted);margin:.15rem 0 1rem}
+  .legend{display:flex;gap:.5rem;align-items:center;font-size:.8rem;color:var(--muted);margin-bottom:1rem}
+  .sw{width:.65rem;height:.65rem;border-radius:2px;display:inline-block;margin-left:.75rem}
+  .sw:first-child{margin-left:0}
+  .a{background:var(--a)}.b{background:var(--b)}
+  .bars{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:3px;align-items:end;height:13rem}
+  .col{display:flex;flex-direction:column;justify-content:flex-end;height:100%;position:relative;min-width:0}
+  .stack{flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:2px}
+  .seg{border-radius:2px;min-height:0}
+  .x{position:absolute;bottom:-1.5rem;left:50%;transform:translateX(-50%);font-size:.7rem;color:var(--muted);white-space:nowrap}
+  .bars{margin-bottom:2rem}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,22rem),1fr));gap:1rem}
+  .grid .card{margin-bottom:0}.grid{margin-bottom:1rem}
+  .row{display:grid;grid-template-columns:minmax(6rem,40%) 1fr 2.5rem;align-items:center;gap:.75rem;margin-bottom:.55rem}
+  .k{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .t{background:var(--track);height:.7rem;border-radius:4px;overflow:hidden}
+  .f{height:100%;background:var(--a);border-radius:4px}
+  .v{text-align:right;color:var(--ink)}
+  .prow{display:grid;grid-template-columns:2fr 1.5fr 1fr;gap:.75rem;padding:.45rem .5rem;border-bottom:1px solid var(--line)}
+  .prow.head{font-size:.8rem;color:var(--muted)}.pn{text-align:right}
+  .foot{font-size:.8rem;color:var(--muted);line-height:1.6;margin-top:1.25rem}
+</style>
